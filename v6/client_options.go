@@ -1,4 +1,4 @@
-package jupiter
+package v6
 
 import (
 	"net/http"
