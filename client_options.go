@@ -32,17 +32,3 @@ func WithEndpointSwap(endpointSwap string) ClientOption {
 		c.endpointSwap = endpointSwap
 	}
 }
-
-// WithEndpointPrice returns a ClientOption that configures the price endpoint used by the Jupiter client.
-func WithEndpointPrice(endpointPrice string) ClientOption {
-	return func(c *Client) {
-		c.endpointPrice = endpointPrice
-	}
-}
-
-// WithEndpointRoutesMap returns a ClientOption that configures the routes map endpoint used by the Jupiter client.
-func WithEndpointRoutesMap(endpointRoutesMap string) ClientOption {
-	return func(c *Client) {
-		c.endpointRoutesMap = endpointRoutesMap
-	}
-}

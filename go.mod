@@ -1,4 +1,4 @@
-module github.com/dmitrymomot/jupiter
+module github.com/qiruos/jupiter
 
 go 1.19
 

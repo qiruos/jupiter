@@ -3,7 +3,7 @@ package utils_test
 import (
 	"testing"
 
-	"github.com/dmitrymomot/jupiter/utils"
+	"github.com/qiruos/jupiter/utils"
 )
 
 func TestTrimStringBetween(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/dmitrymomot/jupiter/utils"
+	"github.com/qiruos/jupiter/utils"
 	"github.com/stretchr/testify/require"
 )
 

@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 
-	"github.com/dmitrymomot/jupiter/utils"
+	"github.com/qiruos/jupiter/utils"
 )
 
 const (
@@ -22,11 +22,10 @@ type (
 	Client struct {
 		client *http.Client
 
-		apiURL            string
-		endpointQuote     string
-		endpointSwap      string
-		endpointPrice     string
-		endpointRoutesMap string
+		apiURL                   string
+		endpointQuote            string
+		endpointSwap             string
+		endpointSwapInstructions string
 	}
 
 	// ClientOption is a function that can be used to configure a Jupiter client.
@@ -47,11 +46,10 @@ func NewClient(opts ...ClientOption) *Client {
 			Timeout: 30 * time.Second,
 		},
 
-		apiURL:            "https://quote-api.jup.ag/v4",
-		endpointQuote:     "/quote",
-		endpointSwap:      "/swap",
-		endpointPrice:     "/price",
-		endpointRoutesMap: "/indexed-route-map",
+		apiURL:                   "https://quote-api.jup.ag/v6",
+		endpointQuote:            "/quote",
+		endpointSwap:             "/swap",
+		endpointSwapInstructions: "/swap-instructions",
 	}
 
 	for _, opt := range opts {
@@ -117,44 +115,21 @@ func (c *Client) post(endpoint string, params interface{}) (*http.Response, erro
 	return resp, nil
 }
 
-// parseResponse parses the response body into the given response structure.
-func (c *Client) parseResponse(resp *http.Response) (json.RawMessage, error) {
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	var response Response
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return response.Data, nil
-}
-
 // Quote returns a quote for a given input mint, output mint and amount
-func (c *Client) Quote(params QuoteParams) (QuoteResponse, error) {
+func (c *Client) Quote(params QuoteParams) (*QuoteResponse, error) {
 	resp, err := c.get(c.endpointQuote, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make quote request: %w", err)
 	}
 
-	data, err := c.parseResponse(resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse quote response: %w", err)
-	}
+	buf, err := io.ReadAll(resp.Body)
 
 	var quotes QuoteResponse
-	if err := json.Unmarshal(data, &quotes); err != nil {
+	if err := json.Unmarshal(buf, &quotes); err != nil {
 		return nil, fmt.Errorf("failed to parse quote response: %w", err)
 	}
 
-	if len(quotes) == 0 {
-		return nil, fmt.Errorf("no quotes returned")
-	}
-
-	return quotes, nil
+	return &quotes, nil
 }
 
 // Swap returns swap base64 serialized transaction for a route.
@@ -176,118 +151,26 @@ func (c *Client) Swap(params SwapParams) (string, error) {
 	return response.SwapTransaction, nil
 }
 
-// Price returns simple price for a given input mint, output mint and amount.
-func (c *Client) Price(params PriceParams) (PriceMap, error) {
-	resp, err := c.get(c.endpointPrice, params)
+// SwapInstructions Returns instructions that you can use from the quote you get from /quote.
+// The caller is responsible for signing the transactions.
+func (c *Client) SwapInstructions(params SwapParams) (*SwapInstructionsResp, error) {
+	resp, err := c.post(c.endpointSwapInstructions, params)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make price request: %w", err)
+		return nil, fmt.Errorf("failed to make swap request: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	data, err := c.parseResponse(resp)
+	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse price response: %w", err)
+		return nil, fmt.Errorf("io.ReadAll: %w", err)
 	}
 
-	var price PriceMap
-	if err := json.Unmarshal(data, &price); err != nil {
-		return nil, fmt.Errorf("failed to parse price response: %w", err)
+	var response SwapInstructionsResp
+	if err := json.Unmarshal(buf, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse quote response: %w", err)
 	}
 
-	return price, nil
-}
-
-// RoutesMap returns a hash map, input mint as key and an array of valid output mint as values,
-// token mints are indexed to reduce the file size.
-func (c *Client) RoutesMap(onlyDirectRoutes bool) (IndexedRoutesMap, error) {
-	resp, err := c.get(c.endpointRoutesMap, url.Values{
-		"onlyDirectRoutes": []string{strconv.FormatBool(onlyDirectRoutes)},
-	})
-	if err != nil {
-		return IndexedRoutesMap{}, fmt.Errorf("failed to make routes map request: %w", err)
-	}
-
-	var routesMap IndexedRoutesMap
-	if err := json.NewDecoder(resp.Body).Decode(&routesMap); err != nil {
-		return IndexedRoutesMap{}, fmt.Errorf("failed to parse routes map response: %w", err)
-	}
-
-	return routesMap, nil
-}
-
-// BestSwap returns the ebase64 encoded transaction for the best swap route
-// for a given input mint, output mint and amount.
-// Default swap mode: ExactOut, so the amount is the amount of output token.
-// Default wrap unwrap sol: true
-func (c *Client) BestSwap(params BestSwapParams) (string, error) {
-	if params.SwapMode == "" {
-		params.SwapMode = SwapModeExactIn
-	}
-	routes, err := c.Quote(QuoteParams{
-		InputMint:        params.InputMint,
-		OutputMint:       params.OutputMint,
-		Amount:           params.Amount,
-		FeeBps:           params.FeeAmount,
-		SwapMode:         params.SwapMode,
-		OnlyDirectRoutes: false,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	route, err := routes.GetBestRoute()
-	if err != nil {
-		return "", err
-	}
-
-	swap, err := c.Swap(SwapParams{
-		Route:               route,
-		UserPublicKey:       params.UserPublicKey,
-		DestinationWallet:   params.DestinationPublicKey,
-		FeeAccount:          params.FeeAccount,
-		WrapUnwrapSol:       utils.Pointer(true),
-		AsLegacyTransaction: utils.Pointer(true),
-	})
-	if err != nil {
-		return "", err
-	}
-
-	return swap, nil
-}
-
-// ExchangeRate returns the exchange rate for a given input mint, output mint and amount.
-// Default swap mode: ExactOut, so the amount is the amount of output token.
-func (c *Client) ExchangeRate(params ExchangeRateParams) (Rate, error) {
-	result := Rate{
-		InputMint:  params.InputMint,
-		OutputMint: params.OutputMint,
-	}
-	routes, err := c.Quote(QuoteParams{
-		InputMint:        params.InputMint,
-		OutputMint:       params.OutputMint,
-		Amount:           params.Amount,
-		SwapMode:         params.SwapMode,
-		OnlyDirectRoutes: false,
-	})
-	if err != nil {
-		return result, err
-	}
-
-	route, err := routes.GetBestRoute()
-	if err != nil {
-		return result, err
-	}
-
-	inAmount, err := strconv.ParseInt(route.InAmount, 10, 64)
-	if err != nil {
-		return result, fmt.Errorf("failed to parse in amount: %w", err)
-	}
-	outAmount, err := strconv.ParseInt(route.OutAmount, 10, 64)
-	if err != nil {
-		return result, fmt.Errorf("failed to parse out amount: %w", err)
-	}
-
-	result.InAmount = uint64(inAmount)
-	result.OutAmount = uint64(outAmount)
-
-	return result, nil
+	return &response, nil
 }
