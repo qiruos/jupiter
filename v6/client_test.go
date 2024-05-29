@@ -22,6 +22,7 @@ func TestQuote(t *testing.T) {
 		Amount:           100000,
 		OnlyDirectRoutes: true,
 		SwapMode:         v6.SwapModeExactIn,
+		Dexes:            []string{v6.DexRaydium, v6.DexOrcaV1},
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, quotes)
@@ -51,9 +52,9 @@ func TestSwap(t *testing.T) {
 
 	t.Run("create swap tx", func(t *testing.T) {
 		swapTx, err := c.Swap(v6.SwapParams{
-			UserPublicKey: "8HwPMNxtFDrvxXn1fJsAYB258TnA6Ydr1DWCtVYgRW4W",
-			QuoteResponse: quoteResponse,
-			WrapUnwrapSol: utils.Pointer(true),
+			UserPublicKey:    "8HwPMNxtFDrvxXn1fJsAYB258TnA6Ydr1DWCtVYgRW4W",
+			QuoteResponse:    quoteResponse,
+			WrapAndUnwrapSol: utils.Pointer(true),
 		})
 		require.NoError(t, err)
 		require.NotEmpty(t, swapTx)
@@ -80,9 +81,9 @@ func TestSwapInstructions(t *testing.T) {
 
 	t.Run("create swap tx", func(t *testing.T) {
 		swapInstructions, err := c.SwapInstructions(v6.SwapParams{
-			UserPublicKey: "8HwPMNxtFDrvxXn1fJsAYB258TnA6Ydr1DWCtVYgRW4W",
-			QuoteResponse: quoteResponse,
-			WrapUnwrapSol: utils.Pointer(true),
+			UserPublicKey:    "8HwPMNxtFDrvxXn1fJsAYB258TnA6Ydr1DWCtVYgRW4W",
+			QuoteResponse:    quoteResponse,
+			WrapAndUnwrapSol: utils.Pointer(true),
 		})
 		require.NoError(t, err)
 		require.NotEmpty(t, swapInstructions)

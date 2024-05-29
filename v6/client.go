@@ -121,6 +121,9 @@ func (c *Client) Quote(params QuoteParams) (*QuoteResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to make quote request: %w", err)
 	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 
 	buf, err := io.ReadAll(resp.Body)
 
